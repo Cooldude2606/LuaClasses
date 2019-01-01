@@ -5,7 +5,7 @@
 -- mt that is loaded onto all tables
 local _mt_class = {
     -- Class can be called as a function to create a new instance
-    __call=function(self,...) return self.new(...) end,
+    __call=function(self,...) return self:new(...) end,
     __index=function(self,key)
         -- if key is _classConstructor then alternative names are tried
         if key == '_classConstructor' then
