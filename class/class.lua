@@ -24,7 +24,8 @@ local _mt_class = {
 -- creates a new class called called Class, without the use of Class.new
 local Class = setmetatable({
     className='Class',
-    classExtends={},
+    forceHardlink=true,
+    _classExtends={},
     _prototype={},
     _classes={}
 },_mt_class)
@@ -32,6 +33,7 @@ local Class = setmetatable({
 --- The constructor for a class
 -- this case is the constructor for making a new class 
 -- @usage Class{name='car'} -- returns new class named car
+-- @usage Class{name='car',hardlink=true} -- returns new class named car, all instances will be hardlinked
 -- @tparam Class class the class which the constructor is apart of (in this case Class)
 -- @tparam Instance instance the insatnce that is to be modified by the constructor (in this case the new class)
 -- this function does not need to return
@@ -53,8 +55,6 @@ function Class.constructor(class,instance)
     instance.extends=nil
     instance._classExtends=extends
     setmetatable(instance,_mt_class)
-    instance._hardlinkToClass = true
-    class:hardlink(instance)
 end
 
 --- Links an instance to its class if the link was lost
@@ -67,6 +67,17 @@ function Class.autolink(instance)
     else class:link(instance) end
 end
 
+--- Returns the type that an instance is
+-- @usage Class.type(instance) -- return the name of the class which it is an instance of
+-- @tparam Instance instance the instance to get the type of
+-- @treturn string the type that the instance is
+function Class.type(instance)
+    local _type = type(insatnce)
+    if _type == 'table' and instance._className then
+        return instance._className
+    else return _type end
+end
+
 --- Creates a new class
 -- @usage class{foo=1,bar=2} -- returns a new instance of a class
 -- @usage class{_hardlinkToClass=true,foo=1,bar=2} -- returns a new instance of a class with all functions saved to the instance
@@ -74,7 +85,10 @@ end
 -- @tparam boolean hardlink if a hardlink should be created with the class alis instance._hardlinkToClass=true
 -- @treturn Instance the new instance of the class that was created
 function Class._prototype:new(instance,hardlink)
-    local hardlink = hardlink or instance._hardlinkToClass or false
+    -- allow undefined instance
+    local instance = instance or {}
+    -- will this instance be hardlinked
+    local hardlink = hardlink or instance._hardlinkToClass or self.forceHardlink or false
     instance._hardlinkToClass = hardlink
     -- links the instance to this class
     if hardlink then self:hardlink(instance)

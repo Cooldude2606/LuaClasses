@@ -1,1 +1,2 @@
-Class = require 'lib.class'
+Class = require 'class.class'
+Queue = require 'class.queue'
