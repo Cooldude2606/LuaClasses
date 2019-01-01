@@ -52,6 +52,9 @@ function Class.constructor(class,instance)
         or nil
     instance.extends=nil
     instance._classExtends=extends
+    setmetatable(instance,_mt_class)
+    instance._hardlinkToClass = true
+    class:hardlink(instance)
 end
 
 --- Links an instance to its class if the link was lost
@@ -72,7 +75,7 @@ end
 -- @treturn Instance the new instance of the class that was created
 function Class._prototype:new(instance,hardlink)
     local hardlink = hardlink or instance._hardlinkToClass or false
-    instance._hardlinkToClass = false
+    instance._hardlinkToClass = hardlink
     -- links the instance to this class
     if hardlink then self:hardlink(instance)
     else self:link(instance) end
@@ -105,7 +108,7 @@ end
 -- @treturn Instance the instance that has now been linked
 function Class._prototype:hardlink(instance)
     -- saves all values of self into instance, index without metatable
-    for key,value in pairs(self) do
+    for key,value in pairs(self._prototype) do
         instance[key]=value
     end
     return instance
@@ -113,3 +116,13 @@ end
 
 -- Module return
 return Class
+
+--[[ Test
+local Class = require ('lib/Class')
+local Car = Class{name='Car'}
+function Car.constructor(class,instance) instance.isOpen = false end
+function Car._prototype:open() self.isOpen = true end
+function Car._prototype:close() self.isOpen = false end
+local carOne = Car{owner='bob'}
+local carTwo = Car{owner='john'}
+]]
