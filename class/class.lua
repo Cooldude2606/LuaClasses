@@ -45,7 +45,8 @@ function Class.constructor(class,instance)
     instance._className=instance.name
     instance.name=nil
     -- addes a prototype table
-    instance._prototype={}
+    instance._prototype=instance._prototype or {}
+    instance.noMetatable=instance.noMetatable or false
     -- makes extends a table of class names
     local extends = 
         type(extends) == 'table' and not extends.className and extends
@@ -131,7 +132,7 @@ end
 -- Module return
 return Class
 
---[[ Test
+--[[ Tests
 local Class = require ('lib/Class')
 local Car = Class{name='Car'}
 function Car.constructor(class,instance) instance.isOpen = false end

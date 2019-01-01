@@ -43,4 +43,5 @@ function Queue._prototype:pop()
     return element
 end
 
+-- Module return
 return Queue
