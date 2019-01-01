@@ -1,4 +1,4 @@
---- A FIFO queue
+--- A FIFO queue implementation
 -- @class Queue
 -- @author Cooldude2606
 

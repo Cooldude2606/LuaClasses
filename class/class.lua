@@ -72,7 +72,7 @@ end
 -- @tparam Instance instance the instance to get the type of
 -- @treturn string the type that the instance is
 function Class.type(instance)
-    local _type = type(insatnce)
+    local _type = type(instance)
     if _type == 'table' and instance._className then
         return instance._className
     else return _type end
