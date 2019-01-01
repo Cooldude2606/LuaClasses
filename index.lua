@@ -1,0 +1,1 @@
+Class = require 'lib.class'
