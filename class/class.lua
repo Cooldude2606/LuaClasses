@@ -24,7 +24,7 @@ local _mt_class = {
 -- creates a new class called called Class, without the use of Class.new
 local Class = setmetatable({
     className='Class',
-    forceHardlink=true,
+    noMetatable=true,
     _classExtends={},
     _prototype={},
     _classes={}
@@ -88,7 +88,7 @@ function Class._prototype:new(instance,hardlink)
     -- allow undefined instance
     local instance = instance or {}
     -- will this instance be hardlinked
-    local hardlink = hardlink or instance._hardlinkToClass or self.forceHardlink or false
+    local hardlink = hardlink or instance._hardlinkToClass or self.noMetatable or false
     instance._hardlinkToClass = hardlink
     -- links the instance to this class
     if hardlink then self:hardlink(instance)

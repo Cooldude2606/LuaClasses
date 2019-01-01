@@ -3,7 +3,7 @@
 -- @author Cooldude2606
 
 local Class = require 'class.class'
-local Stack = Class{name='Stack',forceHardlink=true}
+local Stack = Class{name='Stack',noMetatable=true}
 
 function Stack.constructor(class,instance)
     instance.size=0
