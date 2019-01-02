@@ -3,7 +3,7 @@
 -- @author Cooldude2606
 
 local Class = require 'class.class'
-local Queue = Class{name='Queue',noMetatable=true}
+local Queue = Class{name='Queue'}
 
 function Queue.constructor(class,instance)
     instance._head=0

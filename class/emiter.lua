@@ -7,7 +7,7 @@
 -- @tparam[opt=false] boolean explicit should all events be registered before being able to register callbacks
 
 local Class = require 'class.class'
-local Emiter = Class{name='Emiter',noMetatable=true}
+local Emiter = Class{name='Emiter'}
 
 function Emiter.constructor(class,instance)
     instance.events = instance.events or {}
