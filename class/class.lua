@@ -33,7 +33,7 @@ local Class = setmetatable({
 --- The constructor for a class
 -- this case is the constructor for making a new class 
 -- @usage Class{name='car'} -- returns new class named car
--- @usage Class{name='car',hardlink=true} -- returns new class named car, all instances will be hardlinked
+-- @usage Class{name='car',useMetatable=true} -- returns new class named car, all instances will have functions added by metatable
 -- @tparam Class class the class which the constructor is apart of (in this case Class)
 -- @tparam Instance instance the insatnce that is to be modified by the constructor (in this case the new class)
 -- this function does not need to return
@@ -64,7 +64,7 @@ end
 function Class.autolink(instance)
     local class = Class._classes[instance._className]
     if not class then return error('Instance of undefined type <'+instance._className+'>') end
-    if instance._hardlinkToClass then class:hardlink(instance)
+    if instance._softlinkToClass then class:softlink(instance)
     else class:link(instance) end
 end
 
@@ -81,23 +81,23 @@ end
 
 --- Creates a new class
 -- @usage class{foo=1,bar=2} -- returns a new instance of a class
--- @usage class{_hardlinkToClass=true,foo=1,bar=2} -- returns a new instance of a class with all functions saved to the instance
+-- @usage class{_softlinkToClass=true,foo=1,bar=2} -- returns a new instance of a class with all functions added by metatable
 -- @tparam table instance a table of details which describs the new instance of the class, is passed to constructor
--- @tparam boolean hardlink if a hardlink should be created with the class alis instance._hardlinkToClass=true
+-- @tparam boolean softlink if a softlink should be created with the class alis instance._softlinkToClass=true
 -- @treturn Instance the new instance of the class that was created
-function Class._prototype:new(instance,hardlink)
+function Class._prototype:new(instance,softlink)
     -- allow undefined instance
     local instance = instance or {}
-    -- will this instance be hardlinked
-    local hardlink = hardlink or instance._hardlinkToClass or not self.useMetatable or false
-    instance._hardlinkToClass = hardlink
-    -- links the instance to this class
-    if hardlink then self:hardlink(instance)
+    -- will this instance be softlinked
+    local softlink = softlink or instance._softlinkToClass or self.useMetatable or false
+    instance._softlinkToClass = softlink
+    -- links the instance softlink this class
+    if softlink then self:softlink(instance)
     else self:link(instance) end
     -- links the instance to all extents if present
     if self._classExtends then
         for _,className in pairs(self._classExtends) do
-            Class._classes[className]:new(instance,hardlink)
+            Class._classes[className]:new(instance,softlink)
         end
     end
     -- defines the type of the instance
@@ -108,20 +108,20 @@ function Class._prototype:new(instance,hardlink)
     return instance
 end
 
---- Creates a link between a class and an instance of the class
--- @usage class:link(instance) -- links instance to be of type class
+--- Creates a soft link between a class and an instance of the class, using metatables
+-- @usage class:softlink(instance) -- links instance to be of type class
 -- @tparam Instance instance the instance that is to be linked with the class
 -- @treturn Instance the instance that has now been linked
-function Class._prototype:link(instance)
+function Class._prototype:softlink(instance)
     -- index link via metatable
     return setmetatable(instance,{__index=self})
 end
 
---- Creates a hard link bettween a class and an instance of the class by copying all functions into the instance
--- @usage class:hardlink(instance) -- links instance to be of type class
+--- Creates a link bettween a class and an instance of the class by copying all functions into the instance
+-- @usage class:link(instance) -- links instance to be of type class
 -- @tparam Instance instance the instance that is to be linked with the class
 -- @treturn Instance the instance that has now been linked
-function Class._prototype:hardlink(instance)
+function Class._prototype:link(instance)
     -- saves all values of self into instance, index without metatable
     for key,value in pairs(self._prototype) do
         instance[key]=value
