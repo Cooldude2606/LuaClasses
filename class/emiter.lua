@@ -69,11 +69,14 @@ end
 -- @tparam string event the name of the event to be emited
 -- @tparam table data a table of data that is passed to each event, includes event.name by default
 function Emiter._prototype:emit(event,data)
-    if not self.events[event] then 
-        local name = self.name and ' for emiter <'..self.name..'>' or ''
-        return error('Event <'..event..'> is not registered'..name)
+    if not self.events[event] then
+        if self.explicit then  
+            local name = self.name and ' for emiter <'..self.name..'>' or ''
+            return error('Event <'..event..'> is not registered'..name)
+        end
     end
     data.name=data.name or event
+    data.emiter=data.emiter or self
     for source,callback in pairs(self.events[event]) do
         if self.protect then pcall(callback,data)
         else callback(data) end
