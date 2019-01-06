@@ -1,174 +1,279 @@
---- An array which can be mounted at a certain index to act as the "start" of the array, all normal array functions work, only custom ones act from the mount point
+--- An array which can be mounted at a certain index to act as the "start" of the segment, custom functions act on this segment
 -- @class Chain
 -- @author Cooldude2606
--- @tparam[opt=false] boolean autoRemount if true when changing mount points all elements before mount are lost
+-- @tparam[opt=Chain.lockTypes.mount] Chain.lockType segmentLock the type of lock that the segment has; decides what happens when an element is inserted, see lock types
+-- @tparam[opt=#self] number segmentSize the size of the segment, the segment is the array starting from the segmentMount
+-- @tparam[opt=1] number segmentMount the mnount point for the segment, segment is segmentSize elements long
+-- @tparam[opt=false] boolean autoDrop if true then any actions which cause elemets to leave the segment will cause those elements to be removed
+-- @tparam[opt=false] boolean returnTable if true functions will return tables rather than Chains, chains are tables with extra functions
 
 local Class = require 'class.class'
 local Chain = Class{name='Chain'}
 
 function Chain.constructor(class,instance)
-    instance.size=0
-    instance.totalSize=0
-    instance._mount=1
-    instance.autoRemount=instance.autoRemount or false
+    instance.totalSize=#instance
+    instance.segmentLock=instance.segmentLock or class.lockType.mount
+    instance.segmentSize=instance.segmentSize or #instance
+    instance.segmentMount=instance.segmentMount or 1
+    instance.autoDrop=instance.autoDrop or false
+    instance.returnTable=instance.returnTable or false
+    if instance.segmentMount < 1 then instance.segmentMount = 1 end
+    if instance.segmentSize < 0 then instance.segmentSize = 0
+    elseif instance.segmentSize > instance.totalSize-instance.segmentMount-1 then instance.segmentSize = instance.totalSize-instance.segmentMount-1 end
 end
 
---- Sets the new mount point in the chain, all functions will treat this as the start of the array
--- @usage chain:setMount(3) -- sets mount to 3
--- @tparam number index the new index for the mount, this is absolute to the start of the internal array
--- @treturn number the number of places that the mount was moved
-function Chain._prototype:setMount(index)
-    if instance.autoRemount then
-        return self:remount(index)
+--- Locks which decide what happens to the segment when elements are added
+-- @table Chain.lockTypes
+-- @value mount default lock type, the mount will not move unless set(jump)SegmentMount or setSegment is used segment acts as a normal array
+-- @value tail the tail of the segment does not move, the mount is forced to move when there is a size change
+-- @value size the size of the segment does not change so elements can be pushed or pulled into or out of the segment
+Chain.lockTypes = {}
+for index,value in ipairs{
+    'mount',
+    'tail',
+    'size'
+} do Chain.types[value] = index end
+
+--- Sets the lock type of the chain
+-- @usage chain:setLock('mount') -- sets the lock type to mount
+-- @tparam string the name of the lock type that will be set
+function Chain._prototype:setLock(type)
+    if Chain.lockTypes[string.lower(type)] then
+        self.segmentLock = Chain.lockTypes[string.lower(type)]
     else
-        local dif = index-self._mount
-        self._mount=index
-        self.size=self.size-dif
-        return self:jumpMount(amount)
+        return error('Invalid lock type')
     end
 end
 
---- Sets the new mount point relative to the current mount point, mount is 0
--- @usage chain:jumpMount(3) -- mount moves forward 3 places
--- @tparam number amount the amount of places to move the mount relative to the current position, can be negative
--- @treturn number the number of places the mount was moved, error correction means the value may be different
-function Chain._prototype:jumpMount(amount)
-    if instance.autoRemount then
-        return self:remount(self._mount+amount)
-    else
-        self._mount=self._mount+amount
-        self.size=self.size-amount
-        -- if the mount falls out of range then it is moved back
-        if self._mount < 1 then
-            local dif = 1-self._mount
-            self._mount=1
-            self.size=self.size-dif
-            return dif
-        elseif self._mount > self.totalSize then
-            local dif = self.totalSize-self._mount
-            self._mount=self.totalSize
-            self.size=self.size-dif
-            return dif
+--- Jumps the segment mount forward or backwards relative to its current location
+-- @usage chain:jumpSegmentMount(2) -- moves the mount forward by 2
+-- @tparam number amount the amount to move the mount by, can be negative
+-- @treturn number the amount the mount was moved, may differ to input due to bounds checking
+function Chain._prototype:jumpSegmentMount(amount)
+    local index = self.segmentMount+amount
+    if index < 1 then index = 1 end
+    if index >= self.totalSize then index = self.totalSize-1 end
+    return self:setSegmentMount(index)
+end
+
+--- Sets the segment mount to a certain interal index
+-- @usage chain:setSegmentMount(2) -- sets the mount to index 2 of the array
+-- @tparam number index the index to move the mount to, size may change depending on lock type
+-- @treturn number the ammount of places that the mount moved, may differ to input due to bounds checking
+function Chain._prototype:setSegmentMount(index)
+    local delta = 0
+    if index > 0 and index < self.totalSize then
+        delta = index-self.segmentMount
+        if self.segmentLock == Chain.lockTypes.tail or self.segmentLock == Chain.lockTypes.mount then
+            -- the tail does not get moved when the mount moves, and the segment size changes
+            self.segmentMount = index
+            self.segmentSize = self.segmentSize-delta
+        elseif self.segmentLock == Chain.lockTypes.size then
+            -- the size is locked so the tail moves with the mount
+            self.segmentMount = index
         else
-            return amount
+            -- invalid lock so no change
+            delta=0
         end
     end
+    if delta > 0 and self.autoDrop then self:drop() end
+    return delta
 end
 
---- Resets the internal array to match the current (or new) mount point; all elements before the mount are lost
--- @usage chain:remount() -- removes all elements before the current mount
--- @tparam[opt=mount] number the index that the internal array is set to
--- @treturn number the ammount of elements removed
-function Chain._prototype:remount(index)
-    local amount = index and index-1 or self._mount-1
-    local ctn = amount
-    while ctn > 0 do
-        ctn=ctn-1
-        table.remove(self,1)
+--- Sets the size of the segment
+-- @usage chain:setSegmentSize(4) -- sets the size to 4 elements
+-- @tparam number size the new size of the segment
+-- @treturn number the change in size that occoured, may differ to input due to bounds checking
+function Chain._prototype:setSegmentSize(size)
+    local delta = 0
+    if size >= 0 and size < self.totalSize-self.segmentMount-1 then
+        delta = size-self.segmentSize
+        if self.segmentLock == Chain.lockTypes.size or self.segmentLock == Chain.lockTypes.mount then
+            -- the mount does not get moved so only the size changes
+            self.segmentSize = size
+        elseif self.segmentLock == Chain.lockTypes.tail then
+            -- the tail does not move so the mount is moved to make up for the size change
+            self.segmentSize = size
+            self.segmentMount = self.segmentMount-delta
+        else
+            -- invalid lock so no change
+            delta = 0
+        end
     end
-    self.totalSize=self.totalSize-amount
-    self.size=self.totalSize
-    self._mount=1
-    return amount
+    if delta > 0 and self.autoDrop then self:drop() end
+    return delta
 end
 
---- Returns the an index relative to the start of the internal array rather than the mount mount, can be negative to get elements at the end of the chain
--- @usage chain:internalIndex(2) -- returns 3 if mount is at 2
--- @usage chain:internalIndex(-2) -- returns 5 if mount is at 2 and size is 4
--- @tparam[opt=1] number index the index in the array, mount is 1, negative is relative to end of array
--- @treturn number the internal index of the element in the internal array
+--- Sets the segment to be between two indexs of the array
+-- @usage chain:setSegment(2,5) -- sets mount to 2 and size to 3
+-- @tparam number startIndex the starting index of the segment (inclusive)
+-- @tparam number endIndex the ending index of the segment (inclusive)
+-- @treturn number the change in position of the mount point
+-- @treturn number the change in size of the segment
+function Chain._prototype:setSegment(startIndex,endIndex)
+    local mountDelta, sizeDelta = 0,0
+    if startIndex <= endIndex and startIndex > 0 and endIndex <= self.totalSize then
+        mountDelta = startIndex-self.segmentMount
+        sizeDelta = endIndex-startIndex-self.segmentSize
+        -- lock type does not matter here unlike the above two cases
+        self.segmentMount=startIndex
+        self.size=endIndex-startIndex 
+    end
+    if (mountDelta > 0 or sizeDelta > 0) and self.autoDrop then self:drop() end
+    return mountDelta, sizeDelta
+end
+
+--- Returns the internal index for an index relative to the mount, mount is 1, last element is -1, 0 is index of element after segment
+-- @usage chain:internalIndex(2) -- returns the internal index of the given index relative to the mount
+-- @tparam number index the index in the segment
+-- @treturn number the index relative to the internal array
 function Chain._prototype:internalIndex(index)
-    local index = index or 1
-    local internalIndex = index+self._mount-1
-    if index < 0 then
-        return self.size+index+1+self._mount
+    local offset = self.segmentMount-1
+    local segmentIndex = index or 1
+    if index <= 0 then
+        segmentIndex = self.size-index
     end
-    return internalIndex
+    return offset+segmentIndex
 end
 
---- Returns the element at this index in the array, mount is 1
--- @usage chain:get(2) -- gets the 2nd element of the array
--- @tparam number index the index of the array to get, can be negative, mount is 1
--- @return the element at that index
-function Chain._prototype:get(index)
-    return self[self:internalIndex(index)]
+--- Gets the element at this index in the segment
+-- @usage chain:getElement(3) -- returns the third element in the segment
+-- @tparam number index the index to get the element of
+-- @return the element at that index in the segment
+function Chain._prototype:getElement(index)
+    local index = index and self:internalIndex(index) or 1
+    return self[index]
 end
 
---- Inserts an element at the end of the array or the given index, mount is 1
--- @usage chain:insert('foo') -- inserts element at the end of the array
--- @usage chain:insert('foo',2) -- inserts element at the 2nd index of the array
--- @param element the element to be inserted into the array
--- @tparam[opt=end] number index the index to insert the element at, mount is 1, negative is relative to end of array
--- @treturn number the location relative to the mount where it was inserted
-function Chain._prototype:insert(element,index)
-    local internalIndex = index and self:internalIndex(index) or self.size+1
-    table.insert(self,internalIndex,element)
-    self.size=self.size+1
-    self.totalSize=self.totalSize+1
-    return internalIndex-self._mount+1
+--- Gets the current segment, or part of it
+-- @usage chain:get() -- returns the current segment
+-- @tparam[opt=mount] number fromIndex the index to start at in the segemnt, default is start of segment
+-- @tparam[opt=all] number length the max number of elements to return from the segment
+-- @treturn table the segment or part of that was found
+function Chain._prototype:get(fromIndex,length)
+    local fromIndex = fromIndex and self:internalIndex(fromIndex) or self.segmentMount
+    local length = length or self.segmentSize
+    if length > self.segmentSize then length = self.segmentSize end
+    local toIndex = fromIndex+length-1
+    local segment = {}
+    for index = fromIndex,toIndex do
+        table.insert(segment,self[index])
+    end
+    if self.returnTable then 
+        return segment
+    else 
+        segment.segmentLock=self.segmentLock
+        segment.autoRemount=self.autoRemount
+        return Chain(segment)
+    end
 end
 
---- Removes an element from the end of the array or given index, mount is 1
--- @usage chain:remove() -- removes the element at the end of the array
--- @usage chain:remove(3) -- removes the 3rd element of the array
--- @tparam[opt=end] number index the index to be removed, mount is 1, negative is relative to end of array
--- @return the element that was removed
-function Chain._prototype:remove(index)
-    local internalIndex = index and self:internalIndex(index) or self.size
-    self.size=self.size-1
-    self.totalSize=self.totalSize-1
-    return table.remove(self,internalIndex)
-end
-
---- Returns part of the chain as a array
--- @usage chain:cut() -- returns an array from the mount to the end
--- @usage chain:cut(2) -- returns an array from the 2nd index relative to the mount to the end
--- @usage chain:cut(2,2) -- returns first two elements from the 2nd index relative to the mount
--- @tparam[opt=mount] number index the start index, mount is 1, negative is relative to end
--- @tparam[opt=all] number length the number of elements to return, returns all if not given
--- @treturn table an array of the elements that were found
-function Chain._prototype:cut(index,length)
-    local fromIndex = index and self:internalIndex(index) or self._mount
+--- Gets the current segment, or part of it, and then removes it from the chain
+-- @usage chain:cut() -- returns the current segment, and removes it from the chain
+-- @tparam[opt=mount] number fromIndex the index to start at in the segemnt, default is start of segment
+-- @tparam[opt=all] number length the max number of elements to return from the segment
+-- @treturn table the segment or part of that was removed
+function Chain._prototype:cut(fromIndex,length)
+    local fromIndex = fromIndex and self:internalIndex(fromIndex) or self.segmentMount
+    local length = length or self.segmentSize
+    if length > self.segmentSize then length = self.segmentSize end
+    local segment = {}
     local ctn = 0
-    local array = {}
-    for index, value in ipairs(self) do
-        if index >= fromIndex then
-            table.insert(array,value)
-            ctn=ctn+1
-        end
-        if length and ctn == length then break end
-    end
-    return array
-end
-
---- Similar to chain:cut but is destructive and always removes till the end of the array
--- @usage chain:drop() -- returns all elements from the mount to the end
--- @usage chain:drop(2) -- returns all elements from the 2nd index relative to the mount to the end
--- @tparam[opt=mount] number index the index to start the drop from, mount is 1, negative is relative to end of array
--- @treturn table an array of all the elements that were removed from the array
-function Chain._prototype:drop(index)
-    local fromIndex = index and self:internalIndex(index) or self._mount
-    local array = {}
     while true do
-        local element = table.remove(self,fromIndex)
+        local element = self:remove(self,fromIndex)
         if not element then break end
-        self.size=self.size-1
-        self.totalSize=self.totalSize-1
-        table.insert(array,element)
+        table.insert(segment,element)
+        ctn=ctn+1
+        if ctn > length then break end
     end
-    return array
+    if self.returnTable then 
+        return segment
+    else 
+        segment.segmentLock=self.segmentLock
+        segment.autoRemount=self.autoRemount
+        return Chain(segment)
+    end
 end
 
---- Returns an interator that can used to interate from the mount to the end
--- @usage for key,value in chain:interate() do -- loops over all elements from the mount till the end
--- @usage for key,value in chain:interate(2) do -- loops over all elements from the 2nd index relative to the mount till the end
--- @usage for key,value in chain:interate(2,3) do -- loops over the first 3 elements from the 2nd index relative to the mount
--- @tparam[opt=mount] number index the starting index of the loop, mount is 1, negative is relative to the end
--- @tparam[opt=all] number length the number of elements to loop over, all if not given
--- @treturn function the interative function for use in a for loop
-function Chain._prototype:interate(index,length)
-    local array = self:cut(index,length)
-    return pairs(array)
+--- Inserts an element into the segment, at the end or the given index
+-- @usage chain:insert('foo') -- inserts foo at the end of the segment
+-- @param element the element to be insetered into the segment
+-- @tparam[opt=end] number index the index to insert the element at
+-- @treturn number the index it was inserted at, may be different due to lock types chaing mount location
+function Chain._prototype:insert(element,index)
+    local index = index and self:internalIndex(index) or self:internalIndex(0)
+    if self.segmentLock == Chain.lockTypes.mount then
+        -- the mount is locked so element is inserted and size is incresed
+        table.insert(self,index,element)
+        self.segmentSize=self.segmentSize+1
+        self.totalSize=self.totalSize+1
+    elseif self.segmentLock == Chain.lockTypes.tail then
+        -- the tail is locked so the element is inserted but the mount gets moved
+        table.insert(self,index,element)
+        self.segmentSize=self.segmentSize+1
+        self.totalSize=self.totalSize+1
+        self.segmentMount=self.segmentMount-1
+        if self.segmentMount < 1 then self.segmentMount = 1 end
+    elseif self.segmentLock == Chain.lockTypes.size then
+        -- the size is locked so the element is inserted but there is no size change
+        table.insert(self,index,element)
+        self.totalSize=self.totalSize+1
+    else
+        -- invalid lock so an error is thorwn
+        return error('Invalid lock type could not insert element')
+    end
+    if self.autoDrop then self:drop() end
+    return index-self.segmentMount
+end
+
+--- Removes and returns an element of the segment, at the end or the given index
+-- @usage chain:remove(3) -- removes the 3rd element from the segment and return its
+-- @tparam number index the index that is to be removed from the array
+-- @return the element at that index in the segment
+function Chain._prototype:remove(index)
+    local element
+    local index = index and self:internalIndex(index) or self:internalIndex(-1)
+    if self.segmentLock == Chain.lockTypes.mount then
+        -- mount is locked so element is removed and size is reduced
+        element = table.remove(self,index)
+        self.segmentSize=self.segmentSize-1
+        self.totalSize=self.totalSize-1
+    elseif self.segmentLock == Chain.lockTypes.tail then
+        -- tail is locked so element is removed and the mount gets moved
+        element = table.remove(self,index)
+        self.segmentSize=self.segmentSize-1
+        self.totalSize=self.totalSize-1
+        self.segmentMount=self.segmentMount+1
+    elseif self.segmentLock == Chain.lockTypes.size then
+        -- the size is locked so the element is inserted but there is no size change
+        element = table.insert(self,index,element)
+        self.totalSize=self.totalSize-1
+    else 
+        -- invalid lock so an error is thorwn
+        return error('Invalid lock type could not insert element')
+    end
+    return element
+end
+
+--- Joins a chain or array onto the end or given index of the segment
+-- @usage chainOne:join(chainTwo) -- adds chainTwo onto the end of the segment of chainOne
+-- @tparam ?table|chain chain the elements that will be inserted into the segment
+-- @tparam[opt=end] number index the index that the elements will be added from, default is end of the segment
+function Chain._prototype:join(chain,index)
+    local index = index and self:internalIndex(index)-1 or self:internalIndex(-1) 
+    for chainIndex,element in ipairs(chain) do
+        self:insert(element,chainIndex+index)
+    end
+    if self.autoDrop then self:drop() end
+end
+
+--- Removes all elements out side of the segment
+-- @usage chain:drop()
+function Chain._prototype:drop()
+    local segment = self:get()
+    for index in ipairs(self) do
+        self[index] = segment[index]
+    end
 end
 
 -- Module return
