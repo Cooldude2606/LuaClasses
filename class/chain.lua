@@ -1,7 +1,7 @@
 --- An array which can be mounted at a certain index to act as the "start" of the segment, custom functions act on this segment
 -- @class Chain
 -- @author Cooldude2606
--- @tparam[opt=Chain.lockTypes.mount] Chain.lockType segmentLock the type of lock that the segment has; decides what happens when an element is inserted, see lock types
+-- @tparam[opt=Chain.lockType.mount] Chain.lockType segmentLock the type of lock that the segment has; decides what happens when an element is inserted, see lock types
 -- @tparam[opt=#self] number segmentSize the size of the segment, the segment is the array starting from the segmentMount
 -- @tparam[opt=1] number segmentMount the mnount point for the segment, segment is segmentSize elements long
 -- @tparam[opt=false] boolean autoDrop if true then any actions which cause elemets to leave the segment will cause those elements to be removed
@@ -19,27 +19,27 @@ function Chain.constructor(class,instance)
     instance.returnTable=instance.returnTable or false
     if instance.segmentMount < 1 then instance.segmentMount = 1 end
     if instance.segmentSize < 0 then instance.segmentSize = 0
-    elseif instance.segmentSize > instance.totalSize-instance.segmentMount-1 then instance.segmentSize = instance.totalSize-instance.segmentMount-1 end
+    elseif instance.segmentSize > instance.totalSize-instance.segmentMount+1 then instance.segmentSize = instance.totalSize-instance.segmentMount+1 end
 end
 
 --- Locks which decide what happens to the segment when elements are added
--- @table Chain.lockTypes
+-- @table Chain.lockType
 -- @value mount default lock type, the mount will not move unless set(jump)SegmentMount or setSegment is used segment acts as a normal array
 -- @value tail the tail of the segment does not move, the mount is forced to move when there is a size change
 -- @value size the size of the segment does not change so elements can be pushed or pulled into or out of the segment
-Chain.lockTypes = {}
+Chain.lockType = {}
 for index,value in ipairs{
     'mount',
     'tail',
     'size'
-} do Chain.types[value] = index end
+} do Chain.lockType[value] = index end
 
 --- Sets the lock type of the chain
 -- @usage chain:setLock('mount') -- sets the lock type to mount
 -- @tparam string the name of the lock type that will be set
 function Chain._prototype:setLock(type)
-    if Chain.lockTypes[string.lower(type)] then
-        self.segmentLock = Chain.lockTypes[string.lower(type)]
+    if Chain.lockType[string.lower(type)] then
+        self.segmentLock = Chain.lockType[string.lower(type)]
     else
         return error('Invalid lock type')
     end
@@ -64,11 +64,11 @@ function Chain._prototype:setSegmentMount(index)
     local delta = 0
     if index > 0 and index < self.totalSize then
         delta = index-self.segmentMount
-        if self.segmentLock == Chain.lockTypes.tail or self.segmentLock == Chain.lockTypes.mount then
+        if self.segmentLock == Chain.lockType.tail or self.segmentLock == Chain.lockType.mount then
             -- the tail does not get moved when the mount moves, and the segment size changes
             self.segmentMount = index
             self.segmentSize = self.segmentSize-delta
-        elseif self.segmentLock == Chain.lockTypes.size then
+        elseif self.segmentLock == Chain.lockType.size then
             -- the size is locked so the tail moves with the mount
             self.segmentMount = index
         else
@@ -88,10 +88,10 @@ function Chain._prototype:setSegmentSize(size)
     local delta = 0
     if size >= 0 and size < self.totalSize-self.segmentMount-1 then
         delta = size-self.segmentSize
-        if self.segmentLock == Chain.lockTypes.size or self.segmentLock == Chain.lockTypes.mount then
+        if self.segmentLock == Chain.lockType.size or self.segmentLock == Chain.lockType.mount then
             -- the mount does not get moved so only the size changes
             self.segmentSize = size
-        elseif self.segmentLock == Chain.lockTypes.tail then
+        elseif self.segmentLock == Chain.lockType.tail then
             -- the tail does not move so the mount is moved to make up for the size change
             self.segmentSize = size
             self.segmentMount = self.segmentMount-delta
@@ -112,12 +112,13 @@ end
 -- @treturn number the change in size of the segment
 function Chain._prototype:setSegment(startIndex,endIndex)
     local mountDelta, sizeDelta = 0,0
+    local endIndex = endIndex<0 and self.totalSize+endIndex+1 or endIndex
     if startIndex <= endIndex and startIndex > 0 and endIndex <= self.totalSize then
         mountDelta = startIndex-self.segmentMount
         sizeDelta = endIndex-startIndex-self.segmentSize
         -- lock type does not matter here unlike the above two cases
         self.segmentMount=startIndex
-        self.size=endIndex-startIndex 
+        self.segmentSize=endIndex-startIndex+1
     end
     if (mountDelta > 0 or sizeDelta > 0) and self.autoDrop then self:drop() end
     return mountDelta, sizeDelta
@@ -131,7 +132,7 @@ function Chain._prototype:internalIndex(index)
     local offset = self.segmentMount-1
     local segmentIndex = index or 1
     if index <= 0 then
-        segmentIndex = self.size-index
+        segmentIndex = self.segmentSize+index+1
     end
     return offset+segmentIndex
 end
@@ -174,17 +175,17 @@ end
 -- @tparam[opt=all] number length the max number of elements to return from the segment
 -- @treturn table the segment or part of that was removed
 function Chain._prototype:cut(fromIndex,length)
-    local fromIndex = fromIndex and self:internalIndex(fromIndex) or self.segmentMount
+    local fromIndex = fromIndex or 1
     local length = length or self.segmentSize
     if length > self.segmentSize then length = self.segmentSize end
     local segment = {}
     local ctn = 0
     while true do
-        local element = self:remove(self,fromIndex)
+        local element = self:remove(fromIndex)
         if not element then break end
         table.insert(segment,element)
         ctn=ctn+1
-        if ctn > length then break end
+        if ctn >= length then break end
     end
     if self.returnTable then 
         return segment
@@ -202,19 +203,19 @@ end
 -- @treturn number the index it was inserted at, may be different due to lock types chaing mount location
 function Chain._prototype:insert(element,index)
     local index = index and self:internalIndex(index) or self:internalIndex(0)
-    if self.segmentLock == Chain.lockTypes.mount then
+    if self.segmentLock == Chain.lockType.mount then
         -- the mount is locked so element is inserted and size is incresed
         table.insert(self,index,element)
         self.segmentSize=self.segmentSize+1
         self.totalSize=self.totalSize+1
-    elseif self.segmentLock == Chain.lockTypes.tail then
+    elseif self.segmentLock == Chain.lockType.tail then
         -- the tail is locked so the element is inserted but the mount gets moved
         table.insert(self,index,element)
         self.segmentSize=self.segmentSize+1
         self.totalSize=self.totalSize+1
         self.segmentMount=self.segmentMount-1
         if self.segmentMount < 1 then self.segmentMount = 1 end
-    elseif self.segmentLock == Chain.lockTypes.size then
+    elseif self.segmentLock == Chain.lockType.size then
         -- the size is locked so the element is inserted but there is no size change
         table.insert(self,index,element)
         self.totalSize=self.totalSize+1
@@ -233,20 +234,20 @@ end
 function Chain._prototype:remove(index)
     local element
     local index = index and self:internalIndex(index) or self:internalIndex(-1)
-    if self.segmentLock == Chain.lockTypes.mount then
+    if self.segmentLock == Chain.lockType.mount then
         -- mount is locked so element is removed and size is reduced
         element = table.remove(self,index)
         self.segmentSize=self.segmentSize-1
         self.totalSize=self.totalSize-1
-    elseif self.segmentLock == Chain.lockTypes.tail then
+    elseif self.segmentLock == Chain.lockType.tail then
         -- tail is locked so element is removed and the mount gets moved
         element = table.remove(self,index)
         self.segmentSize=self.segmentSize-1
         self.totalSize=self.totalSize-1
         self.segmentMount=self.segmentMount+1
-    elseif self.segmentLock == Chain.lockTypes.size then
+    elseif self.segmentLock == Chain.lockType.size then
         -- the size is locked so the element is inserted but there is no size change
-        element = table.insert(self,index,element)
+        element = table.remove(self,index,element)
         self.totalSize=self.totalSize-1
     else 
         -- invalid lock so an error is thorwn
@@ -274,7 +275,52 @@ function Chain._prototype:drop()
     for index in ipairs(self) do
         self[index] = segment[index]
     end
+    self.totalSize=#self
+    self.segmentSize=self.totalSize
+    self.segmentMount=1
+end
+
+--- Allows interating over the segment
+-- @usage for index,element in chain:pairs() do
+-- @treturn interator a interator function
+function Chain._prototype:pairs()
+    local segment = self:get()
+    return pairs(segment)
 end
 
 -- Module return
 return Chain
+--[[ Tests
+local chain = Chain()
+for i=1,10 do chain:insert('foo'..i) end -- init with 10 elements
+
+chain:setSegment(2,-3) -- from 2 till 2 from the end
+chain:get() -- {'foo2','foo3'...'foo7','foo8'}
+chain:get(2,3) -- {'foo3','foo4','foo5'}
+
+chain:jumpSegmentMount(1) -- moves mount by 1 index
+chain:get() -- {'foo3','foo4'...'foo7','foo8'}
+
+chain:insert('bar1',2) -- inserts bar at element two of segment
+chain:get() -- {'foo3','bar1','foo4'...'foo7','foo8'}
+
+chain:remove(3) -- removes foo4 at index 3 from the segment
+chain:get() -- {'foo3','bar1','foo5'...'foo7','foo8'}
+
+for k,v in ipairs(chain) do print(k..': '..v) end -- prints whole chain
+-- {'foo1','foo2','foo3','bar1','foo5','foo6','foo7','foo8','foo9','foo10'}
+chain:drop() -- removes all outside segment
+for k,v in ipairs(chain) do print(k..': '..v) end -- prints whole chain
+-- {'foo3','bar1','foo5','foo6','foo7','foo8'}
+chain:get() -- should be the same as above
+
+chain:setLock('size') -- locks the size
+chain:setSegmentSize(2) -- forces the size to 2
+chain:get() -- {'foo3','bar1'}
+chain:jumpSegmentMount(1) -- moves mount by 1 index
+chain:get() -- {'bar1','foo5'}
+chain:cut() -- {'bar1','foo5'}
+chain:get() -- {'foo6','foo7'}
+for k,v in ipairs(chain) do print(k..': '..v) end -- prints whole chain
+-- {'foo3','foo6','foo7','foo8'}
+]]
