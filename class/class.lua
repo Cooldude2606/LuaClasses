@@ -48,10 +48,11 @@ function Class.constructor(class,instance)
     instance._prototype=instance._prototype or {}
     instance.useMetatable=instance.useMetatable or false
     -- makes extends a table of class names
+    local ext = instance.extends
     local extends = 
-        type(extends) == 'table' and not extends.className and extends
-        or type(extends) == 'table' and extends.className and {extends.className}
-        or extends and {extends}
+        type(ext) == 'table' and not ext.className and ext
+        or type(ext) == 'table' and ext.className and {ext.className}
+        or ext and {ext}
         or nil
     instance.extends=nil
     instance._classExtends=extends

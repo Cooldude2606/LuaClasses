@@ -18,6 +18,7 @@ end
 -- @treturn boolean did the chain finish exucution
 function FunctionChain._prototype:trigger(data)
     local functions = {}
+    local data = data or {}
     -- copies all number keys which are the call backs
     for i,v in ipairs(self) do table.insert(functions,v) end
     -- emits trigger event
@@ -35,3 +36,47 @@ function FunctionChain._prototype:trigger(data)
 end
 
 return FunctionChain
+--[[ Tests
+local funChain = FunctionChain{
+    function(data) print('call one') end,
+    function(data) print('call two') end,
+    function(data) print('call end') end,
+}
+
+funChain:on('trigger',function() print('trigger') end)
+funChain:on('error',function(event) print(event.message) end)
+funChain:on('success',function() print('success') end)
+
+funChain:trigger()
+Result:
+> trigger
+> call one
+> call two
+> call end
+> success
+
+funChain:insert(function(data) print('after end') end)
+funChain:setSegment(2,2)
+funChain:insert(function(data) print('call three') end)
+funChain:insert(function(data) if data.error then error(data.error) end end)
+funChain:insert(function(data) print('call four') end)
+
+funChain:trigger()
+Result:
+> trigger
+> call one
+> call two
+> call three
+> call four
+> call end
+> after end
+> success
+
+funChain:trigger{error='Very Important Error'}
+Result:
+> trigger
+> call one
+> call two
+> call three
+> Very Important Error
+]]
