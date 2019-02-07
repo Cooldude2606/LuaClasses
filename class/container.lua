@@ -66,7 +66,7 @@ end
 -- @tparam msg string the message that will be outputed
 function Container._prototype:vlog(type,msg)
     if self.logs[type] then
-        self.logs.output('['..type..'] '..msg)
+        self.logs.output(type,msg)
     end
 end
 
@@ -244,7 +244,7 @@ container.overrides = {
 container.logs = {
     error=true,
     info=false,
-    output=print
+    output=output=function(type,msg) print('['..type..'] '..msg) end
 }
 
 container:spawn()

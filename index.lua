@@ -28,7 +28,7 @@ container.logs = {
     load=true,
     error=true,
     info=false,
-    output=print
+    output=function(type,msg) print('['..type..'] '..msg) end
 }
 
 container:spawn()
