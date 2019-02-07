@@ -64,7 +64,7 @@ end
 -- @usage container:vlog('error','this is an error')
 -- @tparam type string the type of log this is, will log if value is true in container.logs
 -- @tparam msg string the message that will be outputed
-function Container._prototype:vlog(type,msg)
+function Container._prototype:log(type,msg)
     if self.logs[type] then
         self.logs.output(type,msg)
     end
@@ -233,7 +233,7 @@ container.files = {
 }
 
 container.overrides = {
-    vlog=function(...) container:vlog(...) end,
+    vlog=function(...) container:log(...) end,
     require=function(...) return container:require(...) end,
     test=function() print('Hello, World!') end,
     tprint=function(tbl) for key,value in pairs(tbl) do print(key..': '..tostring(value)) end end,
