@@ -11,12 +11,13 @@ container.files = {
     'class.queue',
     'class.stack',
     'class.emiter',
-    'class.chain'
+    'class.chain',
+    'class.functionChain'
 }
 
 container.overrides = {
     vlog=function(...) container:vlog(...) end,
-    require=function(...) container:require(...) end,
+    require=function(...) return container:require(...) end,
     test=function() print('Hello, World!') end,
     tprint=function(tbl) for key,value in pairs(tbl) do print(key..': '..tostring(value)) end end,
     fprint=function(tbl) for key,value in pairs(tbl) do if type(value) ~= 'function' then print(key..': '..tostring(value)) end end end,
@@ -24,6 +25,7 @@ container.overrides = {
 }
 
 container.logs = {
+    load=true,
     error=true,
     info=false,
     output=print

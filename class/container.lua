@@ -33,7 +33,6 @@ local _mt_class = {
 
 function Container.constructor(class,instance)
     instance.debug = false
-    instance.null = {}
     instance.files = {}
     instance.shared = {}
     instance.fileState = 'NOT_LOADED'
@@ -92,7 +91,7 @@ end
 -- @tparam path string the path to the file to check
 -- @treturn boolean is the file loaded
 function Container._prototype:fileLoaded(path)
-    return self.files[path] and self.files[path] ~= this.null
+    return self.files[path] and true or false
 end
 
 --- Gets the loaded contents of a file if it is loaded, nil other wise
@@ -100,7 +99,7 @@ end
 -- @tparam path string the path to the file to get
 -- @return the file returns
 function Container._prototype:file(path)
-    return type(self.files[path]) == 'table' and self.files[path] or nil
+    return self.files[path]
 end
 
 --- Runs a function if defug is set to true, will place the function into the debugEnv if present
@@ -123,7 +122,13 @@ end
 -- @return the file returns
 function Container._prototype:require(path)
     -- self._overrides.require is checked as it may have been over writen with this function
-    return self:file(path) or self._overrides.require and self._overrides.require(path) or require(path)
+    if self:file(path) then
+        return self:file(path)
+    elseif self._overrides.require then
+        return self._overrides.require(path)
+    else
+        return require(path)
+    end
 end
 
 --- Sandboxs a function into the container and the given env, will load upvalues if provied in the given env
@@ -195,17 +200,16 @@ end
 -- @usage conatiner:load()
 function Container._prototype:load()
     self.fileState = 'LOADING'
-    local loaded = {}
-    for _,filePath in pairs(self.files) do
+    for _,filePath in ipairs(self.files) do
+        vlog('load','Loading '..filePath)
         if self.spawned then
-            loaded[filePath] = require(filePath)
+            self.files[filePath] = require(filePath)
         else
             local success, rtn = self:sandbox(require,{},filePath)
             if not success then error(rtn) end
-            loaded[filePath] = rtn
+            self.files[filePath] = rtn
         end
     end
-    self.files = loaded
     self.fileState = 'LOADED'
 end
 
@@ -230,7 +234,7 @@ container.files = {
 
 container.overrides = {
     vlog=function(...) container:vlog(...) end,
-    require=function(...) container:require(...) end,
+    require=function(...) return container:require(...) end,
     test=function() print('Hello, World!') end,
     tprint=function(tbl) for key,value in pairs(tbl) do print(key..': '..tostring(value)) end end,
     fprint=function(tbl) for key,value in pairs(tbl) do if type(value) ~= 'function' then print(key..': '..tostring(value)) end end end,
