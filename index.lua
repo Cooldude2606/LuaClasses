@@ -16,7 +16,7 @@ container.files = {
 }
 
 container.overrides = {
-    vlog=function(...) container:vlog(...) end,
+    log=function(...) container:log(...) end,
     require=function(...) return container:require(...) end,
     test=function() print('Hello, World!') end,
     tprint=function(tbl) for key,value in pairs(tbl) do print(key..': '..tostring(value)) end end,
